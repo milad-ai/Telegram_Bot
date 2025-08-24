@@ -63,11 +63,8 @@ welcome_text = (
 )
 
 def get_persian_datetime():
-    """تاریخ و ساعت فعلی را به وقت تهران و به فارسی برمی‌گرداند"""
-    # تنظیم timezone تهران
-    tehran_tz = pytz.timezone('Asia/Tehran')
-    now = datetime.now(tehran_tz)
-    
+    """تاریخ و ساعت فعلی را به فارسی برمی‌گرداند"""
+    now = datetime.now()
     persian_date = jdatetime.datetime.fromgregorian(datetime=now)
     
     # نام روزهای هفته به فارسی
@@ -146,58 +143,24 @@ def start(update: Update, context: CallbackContext):
         ], one_time_keyboard=True)
         update.message.reply_text("نوع ورود خود را انتخاب کنید:", reply_markup=reply_markup)
     else:
+        # همه کاربران به عنوان دانشجو شروع می‌کنند
         update.message.reply_text(welcome_text)
-        
-        # نمایش دکمه مدیر فقط اگر رمز تنظیم شده باشد
-        if ADMIN_PASSWORD:
-            reply_markup = ReplyKeyboardMarkup([
-                ["👤 دانشجو", "🔐 مدیر"]
-            ], one_time_keyboard=True)
-            update.message.reply_text("شما کیستید؟", reply_markup=reply_markup)
-            user_state[chat_id] = "choosing_role"
-        else:
-            # اگر رمز ادمین تنظیم نشده، مستقیم به منوی دانشجو برو
-            user_state[chat_id] = "waiting_major"
-            reply_markup = ReplyKeyboardMarkup(majors, one_time_keyboard=True)
-            update.message.reply_text("لطفاً رشته خود را انتخاب کنید:", reply_markup=reply_markup)
+        user_state[chat_id] = "waiting_major"
+        reply_markup = ReplyKeyboardMarkup(majors, one_time_keyboard=True)
+        update.message.reply_text("لطفاً رشته خود را انتخاب کنید:", reply_markup=reply_markup)
 
 def handle_message(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     text = update.message.text
 
+    # بررسی ورود رمز ادمین از طریق /admin
+    if handle_admin_password(update, context):
+        return
+
     # بررسی دکمه بازگشت به منو اصلی
     if text == "🔙 بازگشت به منو اصلی":
         user_state[chat_id] = "completed"
         update.message.reply_text("بازگشت به منو اصلی:", reply_markup=get_main_menu())
-        return
-
-    # انتخاب نقش کاربر
-    if user_state.get(chat_id) == "choosing_role":
-        if text == "👤 دانشجو":
-            user_state[chat_id] = "waiting_major"
-            reply_markup = ReplyKeyboardMarkup(majors, one_time_keyboard=True)
-            update.message.reply_text("لطفاً رشته خود را انتخاب کنید:", reply_markup=reply_markup)
-        elif text == "🔐 مدیر":
-            user_state[chat_id] = "waiting_admin_password"
-            update.message.reply_text("🔐 لطفاً رمز مدیریت را وارد کنید:", reply_markup=ReplyKeyboardRemove())
-        return
-
-    # ورود رمز ادمین
-    if user_state.get(chat_id) == "waiting_admin_password":
-        if ADMIN_PASSWORD and text == ADMIN_PASSWORD:
-            add_admin(chat_id)
-            user_state[chat_id] = "admin_mode"
-            reply_markup = ReplyKeyboardMarkup([
-                ["👤 ورود به عنوان دانشجو", "🛠 پنل مدیریت"]
-            ], one_time_keyboard=True)
-            update.message.reply_text("✅ رمز صحیح است! خوش آمدید مدیر محترم.", reply_markup=reply_markup)
-        elif not ADMIN_PASSWORD:
-            update.message.reply_text("❌ رمز ادمین تنظیم نشده است. لطفاً با مدیر سیستم تماس بگیرید.")
-            user_state[chat_id] = "waiting_major"
-            reply_markup = ReplyKeyboardMarkup(majors, one_time_keyboard=True)
-            update.message.reply_text("لطفاً رشته خود را انتخاب کنید:", reply_markup=reply_markup)
-        else:
-            update.message.reply_text("❌ رمز اشتباه است. لطفاً دوباره تلاش کنید یا /start را بزنید.")
         return
 
     # مدیریت حالت ادمین
@@ -293,20 +256,8 @@ def handle_message(update: Update, context: CallbackContext):
             reply_markup = get_hw_selection_menu()
             update.message.reply_text("شماره تمرین جدید را انتخاب کنید:", reply_markup=reply_markup)
         elif text == "پایان":
-            # بررسی ادمین بودن برای نمایش پنل مدیریت
-            if is_admin(chat_id):
-                reply_markup = ReplyKeyboardMarkup([
-                    ["👤 ورود به عنوان دانشجو", "🛠 پنل مدیریت"],
-                    ["❌ خروج کامل"]
-                ], one_time_keyboard=True)
-                update.message.reply_text("گزینه مورد نظر را انتخاب کنید:", reply_markup=reply_markup)
-                user_state[chat_id] = "admin_mode"
-            else:
-                update.message.reply_text("متشکرم از استفاده! برای شروع دوباره /start را بزنید.", 
-                                        reply_markup=get_main_menu())
-        elif text == "❌ خروج کامل":
             update.message.reply_text("متشکرم از استفاده! برای شروع دوباره /start را بزنید.", 
-                                    reply_markup=ReplyKeyboardRemove())
+                                    reply_markup=get_main_menu())
         else:
             update.message.reply_text("لطفاً یکی از گزینه‌های منو را انتخاب کنید.", 
                                     reply_markup=get_main_menu())
@@ -428,243 +379,10 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
     update.message.reply_text(result_message, reply_markup=get_main_menu())
     user_state[chat_id] = "completed"
 
-# ==================== توابع پنل ادمین ====================
-def show_general_stats(update: Update):
-    """نمایش آمار کلی"""
-    try:
-        with engine.begin() as conn:
-            # تعداد کل دانشجویان
-            total_students = conn.execute(text("""
-                SELECT COUNT(DISTINCT student_id) FROM student_results
-            """)).fetchone()[0]
-            
-            # تعداد کل ارسال‌ها
-            total_submissions = conn.execute(text("""
-                SELECT COUNT(*) FROM student_results
-            """)).fetchone()[0]
-            
-            # میانگین نمرات
-            avg_score = conn.execute(text("""
-                SELECT ROUND(AVG(CAST(correct_count AS FLOAT)), 2) FROM student_results
-            """)).fetchone()[0]
-            
-            # آمار هر تمرین
-            hw_stats = conn.execute(text("""
-                SELECT hw, COUNT(*) as submissions, ROUND(AVG(CAST(correct_count AS FLOAT)), 2) as avg_score
-                FROM student_results 
-                GROUP BY hw 
-                ORDER BY hw
-            """)).fetchall()
-            
-            # بهترین نمرات
-            top_scores = conn.execute(text("""
-                SELECT name, student_id, major, hw, correct_count
-                FROM student_results 
-                WHERE correct_count = (SELECT MAX(correct_count) FROM student_results)
-                LIMIT 5
-            """)).fetchall()
-
-        persian_date, persian_time = get_persian_datetime()
-        
-        message = f"📊 **گزارش آماری کلی**\n"
-        message += f"📅 تاریخ: {persian_date}\n"
-        message += f"🕐 ساعت: {persian_time}\n\n"
-        
-        message += f"👥 تعداد کل دانشجویان: {total_students}\n"
-        message += f"📝 تعداد کل ارسال‌ها: {total_submissions}\n"
-        message += f"📊 میانگین نمرات: {avg_score or 0}\n\n"
-        
-        message += "📈 **آمار هر تمرین:**\n"
-        for hw, submissions, avg in hw_stats:
-            message += f"تمرین {hw}: {submissions} ارسال، میانگین: {avg or 0}\n"
-        
-        message += f"\n🏆 **بهترین نمرات:**\n"
-        for name, student_id, major, hw, score in top_scores:
-            message += f"{name} ({student_id}) - {major} - تمرین {hw}: {score}\n"
-            
-        update.message.reply_text(message, reply_markup=get_admin_menu())
-        
-    except Exception as e:
-        update.message.reply_text(f"❌ خطا در دریافت آمار: {str(e)}", reply_markup=get_admin_menu())
-
-def show_major_stats(update: Update):
-    """نمایش آمار بر اساس رشته"""
-    try:
-        with engine.begin() as conn:
-            # آمار هر رشته
-            major_stats = conn.execute(text("""
-                SELECT 
-                    major,
-                    COUNT(DISTINCT student_id) as students,
-                    COUNT(*) as submissions,
-                    ROUND(AVG(CAST(correct_count AS FLOAT)), 2) as avg_score,
-                    MAX(correct_count) as max_score,
-                    MIN(correct_count) as min_score
-                FROM student_results 
-                GROUP BY major 
-                ORDER BY major
-            """)).fetchall()
-            
-            # آمار هر رشته برای هر تمرین
-            detailed_stats = conn.execute(text("""
-                SELECT 
-                    major, hw,
-                    COUNT(*) as submissions,
-                    ROUND(AVG(CAST(correct_count AS FLOAT)), 2) as avg_score
-                FROM student_results 
-                GROUP BY major, hw 
-                ORDER BY major, hw
-            """)).fetchall()
-
-        persian_date, persian_time = get_persian_datetime()
-        
-        message = f"📈 **گزارش آماری بر اساس رشته**\n"
-        message += f"📅 تاریخ: {persian_date}\n\n"
-        
-        message += "📊 **آمار کلی هر رشته:**\n"
-        for major, students, submissions, avg, max_score, min_score in major_stats:
-            message += f"\n🎓 **{major}:**\n"
-            message += f"  👥 دانشجویان: {students}\n"
-            message += f"  📝 ارسال‌ها: {submissions}\n"
-            message += f"  📊 میانگین: {avg or 0}\n"
-            message += f"  🔝 بالاترین: {max_score}\n"
-            message += f"  🔻 پایین‌ترین: {min_score}\n"
-        
-        message += f"\n📋 **آمار تفصیلی هر تمرین:**\n"
-        current_major = ""
-        for major, hw, submissions, avg in detailed_stats:
-            if major != current_major:
-                message += f"\n🎓 **{major}:**\n"
-                current_major = major
-            message += f"  تمرین {hw}: {submissions} ارسال، میانگین: {avg or 0}\n"
-            
-        update.message.reply_text(message, reply_markup=get_admin_menu())
-        
-    except Exception as e:
-        update.message.reply_text(f"❌ خطا در دریافت آمار رشته: {str(e)}", reply_markup=get_admin_menu())
-
-def show_student_list(update: Update):
-    """نمایش لیست دانشجویان"""
-    try:
-        with engine.begin() as conn:
-            students = conn.execute(text("""
-                SELECT 
-                    student_id, name, major,
-                    COUNT(*) as total_submissions,
-                    ROUND(AVG(CAST(correct_count AS FLOAT)), 2) as avg_score,
-                    MAX(submission_time) as last_submission
-                FROM student_results 
-                GROUP BY student_id, name, major 
-                ORDER BY major, name
-            """)).fetchall()
-
-        if not students:
-            update.message.reply_text("📋 هنوز هیچ دانشجویی ثبت‌نام نکرده است.", reply_markup=get_admin_menu())
-            return
-
-        message = f"📋 **لیست دانشجویان** ({len(students)} نفر)\n\n"
-        
-        current_major = ""
-        for student_id, name, major, submissions, avg, last_sub in students:
-            if major != current_major:
-                message += f"\n🎓 **{major}:**\n"
-                current_major = major
-            
-            # تبدیل تاریخ آخرین ارسال
-            if last_sub:
-                last_date = jdatetime.datetime.fromgregorian(datetime=last_sub)
-                last_formatted = f"{last_date.day}/{last_date.month}/{last_date.year}"
-            else:
-                last_formatted = "---"
-                
-            message += f"• {name} ({student_id})\n"
-            message += f"  📝 {submissions} ارسال | 📊 میانگین: {avg or 0} | 📅 آخرین: {last_formatted}\n"
-            
-        update.message.reply_text(message, reply_markup=get_admin_menu())
-        
-    except Exception as e:
-        update.message.reply_text(f"❌ خطا در دریافت لیست: {str(e)}", reply_markup=get_admin_menu())
-
-def export_to_text(update: Update):
-    """خروجی متنی از اطلاعات (جایگزین Excel)"""
-    try:
-        with engine.begin() as conn:
-            all_data = conn.execute(text("""
-                SELECT 
-                    student_id, name, major, hw, correct_count, submission_time
-                FROM student_results 
-                ORDER BY major, name, submission_time
-            """)).fetchall()
-
-        if not all_data:
-            update.message.reply_text("📁 هیچ داده‌ای برای خروجی وجود ندارد.", reply_markup=get_admin_menu())
-            return
-
-        persian_date, persian_time = get_persian_datetime()
-        
-        # ایجاد فایل متنی
-        export_text = f"گزارش کامل سیستم تصحیح تمرین\n"
-        export_text += f"تاریخ تهیه: {persian_date} - {persian_time}\n"
-        export_text += f"تعداد رکورد: {len(all_data)}\n"
-        export_text += "=" * 50 + "\n\n"
-        
-        current_student = ""
-        for student_id, name, major, hw, score, sub_time in all_data:
-            if f"{name}_{student_id}" != current_student:
-                export_text += f"\n👤 {name} ({student_id}) - {major}\n"
-                export_text += "-" * 30 + "\n"
-                current_student = f"{name}_{student_id}"
-            
-            # تبدیل تاریخ
-            sub_date = jdatetime.datetime.fromgregorian(datetime=sub_time)
-            date_formatted = f"{sub_date.day}/{sub_date.month}/{sub_date.year} {sub_date.hour:02d}:{sub_date.minute:02d}"
-            
-            export_text += f"تمرین {hw}: {score} نمره | {date_formatted}\n"
-
-        # ارسال به صورت فایل
-        with open('report.txt', 'w', encoding='utf-8') as f:
-            f.write(export_text)
-        
-        with open('report.txt', 'rb') as f:
-            update.message.reply_document(
-                document=f,
-                filename=f'database_report_{persian_date.replace(" ", "_")}.txt',
-                caption="📁 گزارش کامل سیستم"
-            )
-        
-        os.remove('report.txt')  # پاک کردن فایل موقت
-        update.message.reply_text("✅ فایل گزارش ارسال شد.", reply_markup=get_admin_menu())
-        
-    except Exception as e:
-        update.message.reply_text(f"❌ خطا در تهیه گزارش: {str(e)}", reply_markup=get_admin_menu())
-
 # ==================== راه‌اندازی ربات ====================
-def admin_command(update: Update, context: CallbackContext):
-    """دستور مخصوص ادمین"""
-    chat_id = update.message.chat_id
-    if is_admin(chat_id):
-        user_state[chat_id] = "admin_panel"
-        update.message.reply_text("🛠 پنل مدیریت:", reply_markup=get_admin_menu())
-    else:
-        update.message.reply_text("❌ شما دسترسی ادمین ندارید.")
-
-def get_chat_id(update: Update, context: CallbackContext):
-    """نمایش chat_id کاربر"""
-    chat_id = update.message.chat_id
-    user = update.message.from_user
-    message = f"🆔 **اطلاعات شما:**\n"
-    message += f"Chat ID: `{chat_id}`\n"
-    message += f"نام: {user.first_name or 'ندارد'}\n"
-    message += f"نام خانوادگی: {user.last_name or 'ندارد'}\n"
-    message += f"Username: @{user.username or 'ندارد'}\n"
-    message += f"وضعیت ادمین: {'✅ بله' if is_admin(chat_id) else '❌ خیر'}"
-    update.message.reply_text(message, parse_mode='Markdown')
-
 updater = Updater(TOKEN, use_context=True)
 dp = updater.dispatcher
 dp.add_handler(CommandHandler("start", start))
-dp.add_handler(CommandHandler("admin", admin_command))
-dp.add_handler(CommandHandler("chatid", get_chat_id))  # تابع موقت برای گرفتن chat_id
 dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
 dp.add_handler(MessageHandler(Filters.document, handle_document))
 updater.start_polling()
