@@ -1,4 +1,3 @@
-
 import os
 import re
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update, Document
@@ -8,6 +7,7 @@ from flask import Flask
 from threading import Thread
 import jdatetime
 from datetime import datetime
+import pytz
 
 
 # ==================== تنظیمات ====================
@@ -55,8 +55,11 @@ welcome_text = (
 )
 
 def get_persian_datetime():
-    """تاریخ و ساعت فعلی را به فارسی برمی‌گرداند"""
-    now = datetime.now()
+    """تاریخ و ساعت فعلی را به وقت تهران و به فارسی برمی‌گرداند"""
+    # تنظیم timezone تهران
+    tehran_tz = pytz.timezone('Asia/Tehran')
+    now = datetime.now(tehran_tz)
+    
     persian_date = jdatetime.datetime.fromgregorian(datetime=now)
     
     # نام روزهای هفته به فارسی
