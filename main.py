@@ -118,7 +118,7 @@ def handle_message(update: Update, context: CallbackContext):
         if text in ["علوم کامپیوتر", "آمار"]:
             context.user_data["major"] = text
             user_state[chat_id] = "waiting_name"
-            update.message.reply_text("رشته انتخاب شد. لطفاً نام خود را وارد کنید:", reply_markup=ReplyKeyboardRemove())
+            update.message.reply_text("لطفاً نام و نام خانوادگی خود را وارد کنید:", reply_markup=ReplyKeyboardRemove())
         else:
             update.message.reply_text("لطفاً یکی از گزینه‌های منو را انتخاب کنید.")
 
