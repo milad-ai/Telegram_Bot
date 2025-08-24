@@ -1,11 +1,10 @@
 import os
 import re
-from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update, Document
+from telegram import ReplyKeyboardRemove, Update, Document
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 from sqlalchemy import create_engine, text
 from flask import Flask
 from threading import Thread
-
 
 # ==================== تنظیمات ====================
 TOKEN = os.environ.get("BOT_TOKEN")
@@ -16,65 +15,62 @@ if not TOKEN or not DB_URI:
 
 engine = create_engine(DB_URI)
 
-majors = [["علوم کامپیوتر"], ["آمار"]]
-hw_numbers = [["3"]]
-
 user_state = {}
 
 welcome_text = (
-    "🎓 ربات درس پایگاه داده 🎓\n\n"
-    "خوش آمدید! این ربات برای دانشجویان ترم ۱۴۰۴–۱۴۰۵ "
-    "دانشگاه شهید بهشتی، دانشکده ریاضی طراحی شده است.\n\n"
-    "می‌توانید رشته خود را انتخاب کنید، شماره تمرین را وارد کنید، "
-    "و فایل یا متن SQL خود را ارسال کنید تا بررسی و تصحیح شود.\n\n"
+    "🎓 به ربات تصحیح SQL خوش آمدید! 🎓\n\n"
+    "این ربات مخصوص دانشجویان درس پایگاه داده ترم ۱۴۰۴–۱۴۰۵ "
+    "دانشگاه شهید بهشتی، دانشکده ریاضی است.\n\n"
+    "ابتدا نام خود را وارد کنید، سپس شماره دانشجویی، و در نهایت فایل یا متن SQL خود را ارسال کنید "
+    "تا بررسی و تصحیح شود.\n\n"
     "📚 موفق باشید!"
+)
+
+# ==================== پیام راهنما ====================
+sql_guide_text = (
+    "✅ حالا SQL خود را ارسال کنید یا فایل .sql بفرستید.\n\n"
+    "📌 نکات مهم:\n"
+    "1️⃣ شماره تمرین باید داخل SQL مشخص باشد، مثلا: hw01، hw02 و ...\n"
+    "2️⃣ هر سوال با یک کامنت مشخص می‌شود: # number 1, # number 2 و ...\n"
+    "3️⃣ ترتیب اجرای Query ها مهم نیست؛ فقط خروجی باید با جدول مرجع مطابقت داشته باشد.\n"
+    "4️⃣ می‌توانید متن SQL را مستقیم بفرستید یا یک فایل .sql ارسال کنید.\n\n"
+    "💡 نمونه SQL مجاز برای hw01:\n"
+    "```sql\n"
+    "# number 1\n"
+    "SELECT id, name, grade\n"
+    "FROM students\n"
+    "WHERE grade >= 18;  -- hw01\n\n"
+    "# number 2\n"
+    "SELECT COUNT(*) AS student_count\n"
+    "FROM students\n"
+    "WHERE grade >= 18;  -- hw01\n\n"
+    "# number 3\n"
+    "SELECT name\n"
+    "FROM students\n"
+    "WHERE grade < 18;  -- hw01\n"
+    "```"
 )
 
 # ==================== توابع ====================
 def start(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     update.message.reply_text(welcome_text)
-    user_state[chat_id] = "waiting_major"
-    reply_markup = ReplyKeyboardMarkup(majors, one_time_keyboard=True)
-    update.message.reply_text("لطفاً رشته خود را انتخاب کنید:", reply_markup=reply_markup)
+    user_state[chat_id] = "waiting_name"
+    update.message.reply_text("لطفاً نام خود را وارد کنید:")
 
 def handle_message(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
-    text = update.message.text
+    text = update.message.text.strip()
 
-    if user_state.get(chat_id) == "waiting_major":
-        if text in ["علوم کامپیوتر", "آمار"]:
-            context.user_data["major"] = text
-            user_state[chat_id] = "waiting_hw"
-            reply_markup = ReplyKeyboardMarkup(hw_numbers, one_time_keyboard=True)
-            update.message.reply_text("رشته انتخاب شد. شماره تمرین را انتخاب کنید:", reply_markup=reply_markup)
-        else:
-            update.message.reply_text("لطفاً یکی از گزینه‌های منو را انتخاب کنید.")
+    if user_state.get(chat_id) == "waiting_name":
+        context.user_data["name"] = text
+        user_state[chat_id] = "waiting_student_id"
+        update.message.reply_text("نام ثبت شد. لطفاً شماره دانشجویی خود را وارد کنید:")
 
-    elif user_state.get(chat_id) == "waiting_hw":
-        if text in ["3"]:
-            context.user_data["hw"] = text
-            user_state[chat_id] = "waiting_student_info"
-            update.message.reply_text(
-                "نام و شماره دانشجویی خود را با کاما وارد کنید (مثلاً: علی رضایی, 12345):",
-                reply_markup=ReplyKeyboardRemove()
-            )
-        else:
-            update.message.reply_text("لطفاً شماره تمرین معتبر انتخاب کنید.")
-
-    elif user_state.get(chat_id) == "waiting_student_info":
-        try:
-            parts = text.split(",")
-            if len(parts) != 2:
-                raise ValueError("فرمت اشتباه")
-            name = parts[0].strip()
-            student_id = parts[1].strip()
-            context.user_data["name"] = name
-            context.user_data["student_id"] = student_id
-            user_state[chat_id] = "waiting_sql"
-            update.message.reply_text("لطفاً SQL خود را ارسال کنید یا فایل .sql بفرستید.")
-        except Exception:
-            update.message.reply_text("فرمت نامعتبر. لطفاً از فرمت: نام فارسی, شماره دانشجویی استفاده کنید.")
+    elif user_state.get(chat_id) == "waiting_student_id":
+        context.user_data["student_id"] = text
+        user_state[chat_id] = "waiting_sql"
+        update.message.reply_text(sql_guide_text, parse_mode='Markdown')
 
     elif user_state.get(chat_id) == "waiting_sql":
         sql_text = text
@@ -100,26 +96,35 @@ def handle_document(update: Update, context: CallbackContext):
 def process_sql(update: Update, context: CallbackContext, sql_text: str):
     chat_id = update.message.chat_id
 
+    # جدا کردن Queryها بر اساس کامنت # number X
     queries = re.split(r"#\s*number\s*\d+", sql_text, flags=re.IGNORECASE)
     queries = [q.strip() for q in queries if q.strip()]
 
-    hw = context.user_data["hw"]
-    name = context.user_data["name"]
     student_id = context.user_data["student_id"]
+    name = context.user_data["name"]
 
     correct_count = 0
 
     with engine.connect() as conn:
         for i, student_query in enumerate(queries):
             try:
+                # شماره تمرین را از SQL استخراج می‌کنیم: hw01, hw02 ...
+                hw_match = re.search(r"(hw\d+)", student_query, re.IGNORECASE)
+                hw = hw_match.group(1).lower() if hw_match else "hw_unknown"
+
+                # نام جدول مرجع
+                reference_table = f"{hw}_q{i+1}_reference"
+
                 student_rows = conn.execute(text(student_query)).fetchall()
-                reference_table = f"hw{hw}_q{i+1}_reference"
                 reference_rows = conn.execute(text(f"SELECT * FROM {reference_table}")).fetchall()
+
+                # مقایسه خروجی به صورت set
                 if set(student_rows) == set(reference_rows):
                     correct_count += 1
             except Exception as e:
                 print(f"Error executing query {i+1}: {e}")
 
+        # ثبت نتایج
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS student_results (
                 student_id TEXT,
