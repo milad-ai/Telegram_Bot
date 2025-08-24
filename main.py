@@ -143,12 +143,17 @@ def handle_message(update: Update, context: CallbackContext):
                 f"تمرین {hw} انتخاب شد.\n"
                 f"📊 تعداد ارسال‌های باقی‌مانده: {remaining_attempts}\n\n"
                 "لطفاً SQL خود را ارسال کنید یا فایل .sql بفرستید:",
-                reply_markup=ReplyKeyboardRemove()
+                reply_markup=ReplyKeyboardMarkup([["🔙 بازگشت به منو اصلی"]], one_time_keyboard=True)
             )
         else:
             update.message.reply_text("لطفاً شماره تمرین معتبر انتخاب کنید.")
 
     elif user_state.get(chat_id) == "waiting_sql":
+        if text == "🔙 بازگشت به منو اصلی":
+            user_state[chat_id] = "completed"
+            update.message.reply_text("بازگشت به منو اصلی:", reply_markup=get_main_menu())
+            return
+            
         sql_text = text
         process_sql(update, context, sql_text)
 
@@ -173,7 +178,8 @@ def handle_document(update: Update, context: CallbackContext):
 
     document: Document = update.message.document
     if not document.file_name.endswith(".sql"):
-        update.message.reply_text("لطفاً یک فایل معتبر .sql ارسال کنید.")
+        update.message.reply_text("لطفاً یک فایل معتبر .sql ارسال کنید.\n\nیا برای بازگشت به منو اصلی دکمه زیر را بزنید:",
+                                reply_markup=ReplyKeyboardMarkup([["🔙 بازگشت به منو اصلی"]], one_time_keyboard=True))
         return
 
     file = document.get_file()
