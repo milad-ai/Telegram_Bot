@@ -50,30 +50,18 @@ welcome_text = (
     "SELECT name\n"
     "FROM students\n"
     "WHERE grade < 10;\n"
-  
-
 )
 
 def get_persian_datetime():
     """تاریخ و ساعت فعلی را به وقت تهران و به فارسی برمی‌گرداند"""
-    # تنظیم timezone تهران
     tehran_tz = pytz.timezone('Asia/Tehran')
     now = datetime.now(tehran_tz)
-    
     persian_date = jdatetime.datetime.fromgregorian(datetime=now)
     
-    # نام روزهای هفته به فارسی
     persian_weekdays = {
-        0: 'شنبه',
-        1: 'یکشنبه', 
-        2: 'دوشنبه',
-        3: 'سه‌شنبه',
-        4: 'چهارشنبه',
-        5: 'پنج‌شنبه',
-        6: 'جمعه'
+        0: 'شنبه', 1: 'یکشنبه', 2: 'دوشنبه', 3: 'سه‌شنبه',
+        4: 'چهارشنبه', 5: 'پنج‌شنبه', 6: 'جمعه'
     }
-    
-    # نام ماه‌های فارسی
     persian_months = {
         1: 'فروردین', 2: 'اردیبهشت', 3: 'خرداد', 4: 'تیر',
         5: 'مرداد', 6: 'شهریور', 7: 'مهر', 8: 'آبان',
@@ -87,24 +75,6 @@ def get_persian_datetime():
     formatted_time = f"{persian_date.hour:02d}:{persian_date.minute:02d}:{persian_date.second:02d}"
     
     return formatted_date, formatted_time
-
-def get_email_by_major(major: str) -> str:
-    """براساس رشته، ایمیل مناسب را برمی‌گرداند"""
-    if major == "آمار":
-        return "hw@statdb.ir"
-    elif major == "علوم کامپیوتر":
-        return "hw@dbcs.ir"
-    else:
-        return "hw@dbcs.ir"  # پیش‌فرض
-
-def get_table_prefix(major: str) -> str:
-    """براساس رشته، پیشوند جدول مرجع را برمی‌گرداند"""
-    if major == "آمار":
-        return "stat_"
-    elif major == "علوم کامپیوتر":
-        return "cs_"
-    else:
-        return "cs_"  # پیش‌فرض
 
 def get_submission_count(student_id: str, hw: str) -> int:
     """تعداد ارسال‌های قبلی دانشجو برای یک تمرین خاص را برمی‌گرداند"""
@@ -120,11 +90,9 @@ def get_submission_count(student_id: str, hw: str) -> int:
         return 0
 
 def get_main_menu():
-    """منوی اصلی را برمی‌گرداند"""
     return ReplyKeyboardMarkup([["تمرین جدید"], ["پایان"]], one_time_keyboard=True)
 
 def get_hw_selection_menu():
-    """منوی انتخاب تمرین با دکمه بازگشت را برمی‌گرداند"""
     hw_with_back = hw_numbers + [["🔙 بازگشت به منو اصلی"]]
     return ReplyKeyboardMarkup(hw_with_back, one_time_keyboard=True)
 
@@ -140,7 +108,6 @@ def handle_message(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     text = update.message.text
 
-    # بررسی دکمه بازگشت به منو اصلی
     if text == "🔙 بازگشت به منو اصلی":
         user_state[chat_id] = "completed"
         update.message.reply_text("بازگشت به منو اصلی:", reply_markup=get_main_menu())
@@ -175,7 +142,6 @@ def handle_message(update: Update, context: CallbackContext):
             student_id = context.user_data["student_id"]
             hw = text
             
-            # بررسی تعداد ارسال‌های قبلی
             submission_count = get_submission_count(student_id, hw)
             
             if submission_count >= 10:
@@ -248,7 +214,6 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
     student_id = context.user_data["student_id"]
     major = context.user_data["major"]
 
-    # بررسی مجدد محدودیت ارسال
     submission_count = get_submission_count(student_id, hw)
     if submission_count >= 10:
         update.message.reply_text(
@@ -259,18 +224,19 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
         return
 
     correct_count = 0
-    incorrect_questions = []  # لیست سوال‌های اشتباه
-
-    # دریافت پیشوند جدول براساس رشته
-    table_prefix = get_table_prefix(major)
+    incorrect_questions = []
 
     with engine.begin() as conn:
         for i, student_query in enumerate(queries):
             question_number = i + 1
             try:
                 student_rows = conn.execute(text(student_query)).fetchall()
-                # استفاده از پیشوند مناسب برای جدول مرجع
-                reference_table = f"{table_prefix}hw{hw}_q{question_number}_reference"
+                # انتخاب جدول مرجع بر اساس رشته
+                if major == "آمار":
+                    reference_table = f"hw{hw}_q{question_number}_stat_reference"
+                else:
+                    reference_table = f"hw{hw}_q{question_number}_cs_reference"
+
                 reference_rows = conn.execute(text(f"SELECT * FROM {reference_table}")).fetchall()
                 
                 if set(student_rows) == set(reference_rows):
@@ -282,7 +248,6 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
                 print(f"Error executing query {question_number}: {e}")
                 incorrect_questions.append(question_number)
 
-        # ایجاد جدول اگر وجود نداشته باشد (با فیلد major اضافه شده)
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS student_results (
                 id SERIAL PRIMARY KEY,
@@ -295,7 +260,6 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
             )
         """))
 
-        # درج داده‌ها (با major)
         try:
             conn.execute(
                 text("INSERT INTO student_results (student_id, name, major, hw, correct_count) VALUES (:student_id, :name, :major, :hw, :correct_count)"),
@@ -307,9 +271,7 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
             update.message.reply_text(f"⚠️ خطا در ذخیره‌سازی: {str(e)}")
             return
 
-    # آماده‌سازی پیام نتیجه (با اطلاعات دانشجو و تاریخ/ساعت)
     persian_date, persian_time = get_persian_datetime()
-    email_address = get_email_by_major(major)
     
     result_message = f"✅ تصحیح انجام شد!\n\n"
     result_message += f"📅 تاریخ تصحیح: {persian_date}\n"
@@ -319,18 +281,20 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
     result_message += f"📚 رشته: {major}\n"
     result_message += f"📝 تمرین: {hw}\n\n"
     result_message += f"📊 نتیجه: {correct_count}/{len(queries)} سوال درست است.\n\n"
-    
-    # نمایش سوال‌های اشتباه
+
+    # پیام جدید برای ارسال ایمیل
+    if major == "آمار":
+        email_address = "hw@statdb.ir"
+    else:
+        email_address = "hw@dbcs.ir"
+
+    result_message += f"لطفاً از این پیام اسکرین شات بگیرید و با عنوانی که پیش‌تر توضیح داده شده و تمرین‌های قبلی را ارسال می‌کردید به آدرس:\n{email_address}\n\n"
+
     if incorrect_questions:
         result_message += "❌ سوال‌های اشتباه: " + ", ".join(map(str, incorrect_questions)) + "\n\n"
     else:
         result_message += "🎉 تبریک! تمام سوال‌ها درست است!\n\n"
     
-    # درخواست اسکرین‌شات و ارسال ایمیل
-    result_message += f"📧 لطفا از این پیام اسکرین شات بگیرید و با عنوانی که پیش‌تر توضیح داده شده و تمرین‌های قبلی را ارسال می‌کردید به آدرس زیر ارسال کنید:\n"
-    result_message += f"📮 {email_address}\n\n"
-    
-    # نمایش تعداد ارسال‌های باقی‌مانده
     new_submission_count = submission_count + 1
     remaining_attempts = 10 - new_submission_count
     result_message += f"📈 تعداد ارسال‌های انجام شده: {new_submission_count}/10\n"
@@ -339,7 +303,6 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
     if remaining_attempts == 0:
         result_message += "⚠️ این آخرین ارسال شما برای این تمرین بود.\n\n"
     
-    # ارسال نتیجه و آماده‌سازی برای منوی بعدی
     result_message += "آیا می‌خواهید تمرین جدیدی ثبت کنید؟"
     
     update.message.reply_text(result_message, reply_markup=get_main_menu())
@@ -363,5 +326,4 @@ def run():
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
 
-Thread(target=run).start()
-updater.idle()
+Thread(target=r
