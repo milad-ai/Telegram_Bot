@@ -6,6 +6,7 @@ from sqlalchemy import create_engine, text
 from flask import Flask
 from threading import Thread
 
+
 # ==================== تنظیمات ====================
 TOKEN = os.environ.get("BOT_TOKEN")
 DB_URI = os.environ.get("DB_URI")
