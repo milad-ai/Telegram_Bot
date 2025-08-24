@@ -24,42 +24,24 @@ hw_numbers = [["3", "4", "5", "6"]]
 user_state = {}
 
 welcome_text = (
-    "خوش آمدید! این ربات برای درس پایگاه داده دانشجویان در نیم‌سال اول ۱۴۰۵–۱۴۰۴ "
-    "دانشگاه شهید بهشتی، دانشکده ریاضی طراحی شده است.\n\n"
+    "خوش آمدید! این ربات برای درس پایگاه داده دانشجویان طراحی شده است.\n\n"
     "📋 راهنمای استفاده:\n"
     "1️⃣ رشته خود را انتخاب کنید\n"
     "2️⃣ نام و نام خانوادگی و شماره دانشجویی را وارد کنید\n"
-    "3️⃣ شماره تمرین را انتخاب کنید (3، 4، 5، 6)\n"
+    "3️⃣ شماره تمرین را انتخاب کنید\n"
     "4️⃣ کد SQL خود را ارسال کنید (متن یا فایل .sql)\n\n"
-    "⚠️  قبل از هر سوال حتماً کامنت # number X بگذارید\n\n"
+    "⚠️ قبل از هر سوال حتماً کامنت # number X بگذارید\n"
     "• از `;` در پایان هر query استفاده کنید\n"
     "• فاصله‌ها و enter های اضافی مشکلی ندارند\n"
-    "• هر شماره دانشجویی حداکثر ۱۰ بار می‌تواند هر تمرین را ارسال کند\n\n"
-    "📝 نمونه فرمت صحیح:\n"
- 
-    "# number 1\n"
-    "SELECT id, name, grade\n"
-    "FROM students\n"
-    "WHERE grade >= 15;\n\n"
-    "# number 2\n"
-    "SELECT COUNT(*) as student_count\n"
-    "FROM students\n"
-    "WHERE grade >= 15;\n\n"
-    "# number 3\n"
-    "SELECT name\n"
-    "FROM students\n"
-    "WHERE grade < 10;\n"
+    "• هر شماره دانشجویی حداکثر ۱۰ بار می‌تواند هر تمرین را ارسال کند"
 )
 
-# ==================== توابع تاریخ ====================
 def get_persian_datetime():
-    """تاریخ و ساعت فعلی را به وقت تهران و به فارسی برمی‌گرداند"""
     tehran_tz = pytz.timezone('Asia/Tehran')
     now = datetime.now(tehran_tz)
     persian_date = jdatetime.datetime.fromgregorian(datetime=now)
-    persian_weekdays = {0: 'شنبه', 1: 'یکشنبه', 2: 'دوشنبه', 3: 'سه‌شنبه', 4: 'چهارشنبه', 5: 'پنج‌شنبه', 6: 'جمعه'}
-    persian_months = {1: 'فروردین', 2: 'اردیبهشت', 3: 'خرداد', 4: 'تیر', 5: 'مرداد', 6: 'شهریور',
-                      7: 'مهر', 8: 'آبان', 9: 'آذر', 10: 'دی', 11: 'بهمن', 12: 'اسفند'}
+    persian_weekdays = {0:'شنبه',1:'یکشنبه',2:'دوشنبه',3:'سه‌شنبه',4:'چهارشنبه',5:'پنج‌شنبه',6:'جمعه'}
+    persian_months = {1:'فروردین',2:'اردیبهشت',3:'خرداد',4:'تیر',5:'مرداد',6:'شهریور',7:'مهر',8:'آبان',9:'آذر',10:'دی',11:'بهمن',12:'اسفند'}
     weekday_name = persian_weekdays[persian_date.weekday()]
     month_name = persian_months[persian_date.month]
     formatted_date = f"{weekday_name} {persian_date.day} {month_name} {persian_date.year}"
@@ -67,7 +49,6 @@ def get_persian_datetime():
     return formatted_date, formatted_time
 
 def get_submission_count(student_id: str, hw: str) -> int:
-    """تعداد ارسال‌های قبلی دانشجو برای یک تمرین خاص را برمی‌گرداند"""
     try:
         with engine.begin() as conn:
             result = conn.execute(
@@ -80,15 +61,13 @@ def get_submission_count(student_id: str, hw: str) -> int:
         return 0
 
 def get_main_menu():
-    """منوی اصلی"""
     return ReplyKeyboardMarkup([["تمرین جدید"], ["پایان"]], one_time_keyboard=True)
 
 def get_hw_selection_menu():
-    """منوی انتخاب تمرین با دکمه بازگشت"""
     hw_with_back = hw_numbers + [["🔙 بازگشت به منو اصلی"]]
     return ReplyKeyboardMarkup(hw_with_back, one_time_keyboard=True)
 
-# ==================== دستورات ربات ====================
+# ==================== توابع ====================
 def start(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     update.message.reply_text(welcome_text)
@@ -105,7 +84,9 @@ def handle_message(update: Update, context: CallbackContext):
         update.message.reply_text("بازگشت به منو اصلی:", reply_markup=get_main_menu())
         return
 
-    if user_state.get(chat_id) == "waiting_major":
+    state = user_state.get(chat_id)
+
+    if state == "waiting_major":
         if text in ["علوم کامپیوتر", "آمار"]:
             context.user_data["major"] = text
             user_state[chat_id] = "waiting_name"
@@ -113,37 +94,48 @@ def handle_message(update: Update, context: CallbackContext):
         else:
             update.message.reply_text("لطفاً یکی از گزینه‌های منو را انتخاب کنید.")
 
-    elif user_state.get(chat_id) == "waiting_name":
+    elif state == "waiting_name":
         context.user_data["name"] = text.strip()
         user_state[chat_id] = "waiting_student_id"
         update.message.reply_text("لطفاً شماره دانشجویی خود را وارد کنید:")
 
-    elif user_state.get(chat_id) == "waiting_student_id":
+    elif state == "waiting_student_id":
         context.user_data["student_id"] = text.strip()
         user_state[chat_id] = "waiting_hw"
         reply_markup = get_hw_selection_menu()
         update.message.reply_text("اطلاعات شما ثبت شد. شماره تمرین را انتخاب کنید:", reply_markup=reply_markup)
 
-    elif user_state.get(chat_id) == "waiting_hw":
+    elif state == "waiting_hw":
         if text in ["3", "4", "5", "6"]:
             student_id = context.user_data["student_id"]
             hw = text
             submission_count = get_submission_count(student_id, hw)
             if submission_count >= 10:
-                update.message.reply_text(f"❌ شما قبلاً ۱۰ بار تمرین {hw} را ارسال کرده‌اید و حق ارسال مجدد ندارید.\nلطفاً تمرین دیگری انتخاب کنید:", reply_markup=get_hw_selection_menu())
+                update.message.reply_text(
+                    f"❌ شما قبلاً ۱۰ بار تمرین {hw} را ارسال کرده‌اید.",
+                    reply_markup=get_hw_selection_menu()
+                )
                 return
             context.user_data["hw"] = hw
             user_state[chat_id] = "waiting_sql"
             remaining_attempts = 10 - submission_count
-            update.message.reply_text(f"تمرین {hw} انتخاب شد.\n📊 تعداد ارسال‌های باقی‌مانده: {remaining_attempts}\n\nلطفاً SQL خود را ارسال کنید یا فایل .sql بفرستید:", reply_markup=ReplyKeyboardMarkup([["🔙 بازگشت به منو اصلی"]], one_time_keyboard=True))
+            update.message.reply_text(
+                f"تمرین {hw} انتخاب شد.\n📊 تعداد ارسال‌های باقی‌مانده: {remaining_attempts}\n\n"
+                "لطفاً SQL خود را ارسال کنید یا فایل .sql بفرستید:",
+                reply_markup=ReplyKeyboardMarkup([["🔙 بازگشت به منو اصلی"]], one_time_keyboard=True)
+            )
         else:
             update.message.reply_text("لطفاً شماره تمرین معتبر انتخاب کنید.")
 
-    elif user_state.get(chat_id) == "waiting_sql":
-        if text != "🔙 بازگشت به منو اصلی":
-            process_sql(update, context, text)
+    elif state == "waiting_sql":
+        if text == "🔙 بازگشت به منو اصلی":
+            user_state[chat_id] = "completed"
+            update.message.reply_text("بازگشت به منو اصلی:", reply_markup=get_main_menu())
+            return
+        sql_text = text
+        process_sql(update, context, sql_text)
 
-    elif user_state.get(chat_id) == "completed":
+    elif state == "completed":
         if text == "تمرین جدید":
             user_state[chat_id] = "waiting_hw"
             reply_markup = get_hw_selection_menu()
@@ -159,12 +151,11 @@ def handle_document(update: Update, context: CallbackContext):
     if user_state.get(chat_id) != "waiting_sql":
         update.message.reply_text("لطفاً مراحل را از /start دنبال کنید.")
         return
-
     document: Document = update.message.document
     if not document.file_name.endswith(".sql"):
-        update.message.reply_text("لطفاً یک فایل معتبر .sql ارسال کنید.", reply_markup=ReplyKeyboardMarkup([["🔙 بازگشت به منو اصلی"]], one_time_keyboard=True))
+        update.message.reply_text("لطفاً یک فایل معتبر .sql ارسال کنید.",
+                                  reply_markup=ReplyKeyboardMarkup([["🔙 بازگشت به منو اصلی"]], one_time_keyboard=True))
         return
-
     file = document.get_file()
     sql_text = file.download_as_bytearray().decode("utf-8")
     process_sql(update, context, sql_text)
@@ -172,7 +163,6 @@ def handle_document(update: Update, context: CallbackContext):
 # ==================== پردازش SQL ====================
 def process_sql(update: Update, context: CallbackContext, sql_text: str):
     chat_id = update.message.chat_id
-
     queries = re.split(r"#\s*number\s*\d+", sql_text, flags=re.IGNORECASE)
     queries = [q.strip() for q in queries if q.strip()]
 
@@ -183,27 +173,26 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
 
     submission_count = get_submission_count(student_id, hw)
     if submission_count >= 10:
-        update.message.reply_text(f"❌ شما قبلاً ۱۰ بار تمرین {hw} را ارسال کرده‌اید و حق ارسال مجدد ندارید.", reply_markup=get_main_menu())
+        update.message.reply_text(f"❌ شما قبلاً ۱۰ بار تمرین {hw} را ارسال کرده‌اید.", reply_markup=get_main_menu())
         user_state[chat_id] = "completed"
         return
 
     correct_count = 0
     incorrect_questions = []
 
+    def rows_to_set(rows):
+        """تبدیل ردیف‌ها به مجموعه tuple برای مقایسه بدون ترتیب"""
+        return set(tuple(row) for row in rows)
+
     with engine.begin() as conn:
         for i, student_query in enumerate(queries):
             question_number = i + 1
             try:
                 student_rows = conn.execute(text(student_query)).fetchall()
-                # جدول مرجع براساس رشته
-                if major == "آمار":
-                    reference_table = f"stat_hw{hw}_q{question_number}_reference"
-                else:
-                    reference_table = f"cs_hw{hw}_q{question_number}_reference"
-
+                reference_table = f"{major[:2].lower()}_hw{hw}_q{question_number}_reference"
                 reference_rows = conn.execute(text(f"SELECT * FROM {reference_table}")).fetchall()
-                
-                if set(student_rows) == set(reference_rows):
+
+                if rows_to_set(student_rows) == rows_to_set(reference_rows):
                     correct_count += 1
                 else:
                     incorrect_questions.append(question_number)
@@ -211,7 +200,7 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
                 print(f"Error executing query {question_number}: {e}")
                 incorrect_questions.append(question_number)
 
-        # جدول نتایج
+        # ایجاد جدول student_results اگر وجود نداشته باشد
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS student_results (
                 id SERIAL PRIMARY KEY,
@@ -235,21 +224,21 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
 
     persian_date, persian_time = get_persian_datetime()
 
-    # ایمیل براساس رشته
-    email = "hw@statdb.ir" if major == "آمار" else "hw@dbcs.ir"
+    # پیام نتیجه با ایمیل رشته
+    if major == "آمار":
+        email_address = "hw@statdb.ir"
+    else:
+        email_address = "hw@dbcs.ir"
 
-    result_message = (
-        f"✅ تصحیح انجام شد!\n\n"
-        f"📅 تاریخ تصحیح: {persian_date}\n"
-        f"🕐 ساعت تصحیح: {persian_time}\n\n"
-        f"👤 دانشجو: {name}\n"
-        f"🆔 شماره دانشجویی: {student_id}\n"
-        f"📚 رشته: {major}\n"
-        f"📝 تمرین: {hw}\n\n"
-        f"📊 نتیجه: {correct_count}/{len(queries)} سوال درست است.\n\n"
-        f"⚠️ لطفاً از این پیام اسکرین شات بگیرید و با عنوان تمرین‌های قبلی به آدرس ایمیل زیر ارسال کنید:\n"
-        f"📧 {email}\n\n"
-    )
+    result_message = f"✅ تصحیح انجام شد!\n\n"
+    result_message += f"📅 تاریخ تصحیح: {persian_date}\n"
+    result_message += f"🕐 ساعت تصحیح: {persian_time}\n\n"
+    result_message += f"👤 دانشجو: {name}\n"
+    result_message += f"🆔 شماره دانشجویی: {student_id}\n"
+    result_message += f"📚 رشته: {major}\n"
+    result_message += f"📝 تمرین: {hw}\n\n"
+    result_message += f"📊 نتیجه: {correct_count}/{len(queries)} سوال درست است.\n\n"
+    result_message += f"لطفاً از این پیام اسکرین شات بگیرید و با عنوانی که پیش‌تر توضیح داده شده و تمرین‌های قبلی را ارسال می‌کردید به آدرس {email_address} ارسال کنید.\n\n"
 
     if incorrect_questions:
         result_message += "❌ سوال‌های اشتباه: " + ", ".join(map(str, incorrect_questions)) + "\n\n"
@@ -260,10 +249,8 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
     remaining_attempts = 10 - new_submission_count
     result_message += f"📈 تعداد ارسال‌های انجام شده: {new_submission_count}/10\n"
     result_message += f"📊 ارسال‌های باقی‌مانده: {remaining_attempts}\n\n"
-    
     if remaining_attempts == 0:
         result_message += "⚠️ این آخرین ارسال شما برای این تمرین بود.\n\n"
-
     result_message += "آیا می‌خواهید تمرین جدیدی ثبت کنید؟"
 
     update.message.reply_text(result_message, reply_markup=get_main_menu())
