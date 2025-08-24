@@ -193,6 +193,7 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
     hw = context.user_data["hw"]
     name = context.user_data["name"]
     student_id = context.user_data["student_id"]
+    major = context.user_data["major"]
 
     # بررسی مجدد محدودیت ارسال
     submission_count = get_submission_count(student_id, hw)
@@ -224,32 +225,38 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
                 print(f"Error executing query {question_number}: {e}")
                 incorrect_questions.append(question_number)
 
-        # ایجاد جدول اگر وجود نداشته باشد
+        # ایجاد جدول اگر وجود نداشته باشد (با فیلد major اضافه شده)
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS student_results (
                 id SERIAL PRIMARY KEY,
                 student_id TEXT NOT NULL,
                 name TEXT NOT NULL,
+                major TEXT NOT NULL,
                 hw TEXT NOT NULL,
                 correct_count INTEGER NOT NULL,
                 submission_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """))
 
-        # درج داده‌ها
+        # درج داده‌ها (با major)
         try:
             conn.execute(
-                text("INSERT INTO student_results (student_id, name, hw, correct_count) VALUES (:student_id, :name, :hw, :correct_count)"),
-                {"student_id": student_id, "name": name, "hw": hw, "correct_count": correct_count}
+                text("INSERT INTO student_results (student_id, name, major, hw, correct_count) VALUES (:student_id, :name, :major, :hw, :correct_count)"),
+                {"student_id": student_id, "name": name, "major": major, "hw": hw, "correct_count": correct_count}
             )
-            print(f"✅ Data inserted successfully for {name} ({student_id}) - HW{hw}: {correct_count} correct")
+            print(f"✅ Data inserted successfully for {name} ({student_id}) - Major: {major} - HW{hw}: {correct_count} correct")
         except Exception as e:
             print(f"❌ Error inserting data: {e}")
             update.message.reply_text(f"⚠️ خطا در ذخیره‌سازی: {str(e)}")
             return
 
-    # آماده‌سازی پیام نتیجه
-    result_message = f"✅ تصحیح انجام شد!\n📊 نتیجه: {correct_count}/{len(queries)} سوال درست است.\n\n"
+    # آماده‌سازی پیام نتیجه (با اطلاعات دانشجو)
+    result_message = f"✅ تصحیح انجام شد!\n\n"
+    result_message += f"👤 دانشجو: {name}\n"
+    result_message += f"🆔 شماره دانشجویی: {student_id}\n"
+    result_message += f"📚 رشته: {major}\n"
+    result_message += f"📝 تمرین: {hw}\n\n"
+    result_message += f"📊 نتیجه: {correct_count}/{len(queries)} سوال درست است.\n\n"
     
     # نمایش سوال‌های اشتباه
     if incorrect_questions:
