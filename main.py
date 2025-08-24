@@ -45,7 +45,7 @@ welcome_text = (
     "SELECT name\n"
     "FROM students\n"
     "WHERE grade < 10;\n"
-    "```\n\n"
+    "```"
     "✅ نکات:\n"
     "• از `;` در پایان هر query استفاده کنید\n"
     "• فاصله‌ها و enter های اضافی مشکلی ندارند\n"
