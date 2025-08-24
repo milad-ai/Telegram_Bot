@@ -1,6 +1,6 @@
 import os
 import re
-from telegram import ReplyKeyboardRemove, Update, Document
+from telegram import Update, Document
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 from sqlalchemy import create_engine, text
 from flask import Flask
@@ -17,6 +17,9 @@ engine = create_engine(DB_URI)
 
 user_state = {}
 
+# ==================== تمرین جاری ====================
+CURRENT_HW = "hw01"  # فقط یک بار در بالای کد مشخص می‌شود
+
 welcome_text = (
     "🎓 به ربات تصحیح SQL خوش آمدید! 🎓\n\n"
     "این ربات مخصوص دانشجویان درس پایگاه داده ترم ۱۴۰۴–۱۴۰۵ "
@@ -26,28 +29,27 @@ welcome_text = (
     "📚 موفق باشید!"
 )
 
-# ==================== پیام راهنما ====================
 sql_guide_text = (
-    "✅ حالا SQL خود را ارسال کنید یا فایل .sql بفرستید.\n\n"
+    f"✅ حالا SQL خود را ارسال کنید یا فایل .sql بفرستید.\n\n"
     "📌 نکات مهم:\n"
-    "1️⃣ شماره تمرین باید داخل SQL مشخص باشد، مثلا: hw01، hw02 و ...\n"
+    f"1️⃣ شماره تمرین باید در بالای فایل مشخص شود، مثلا: {CURRENT_HW}\n"
     "2️⃣ هر سوال با یک کامنت مشخص می‌شود: # number 1, # number 2 و ...\n"
     "3️⃣ ترتیب اجرای Query ها مهم نیست؛ فقط خروجی باید با جدول مرجع مطابقت داشته باشد.\n"
     "4️⃣ می‌توانید متن SQL را مستقیم بفرستید یا یک فایل .sql ارسال کنید.\n\n"
-    "💡 نمونه SQL مجاز برای hw01:\n"
+    "💡 نمونه SQL مجاز:\n"
     "```sql\n"
     "# number 1\n"
     "SELECT id, name, grade\n"
     "FROM students\n"
-    "WHERE grade >= 18;  -- hw01\n\n"
+    "WHERE grade >= 18;\n\n"
     "# number 2\n"
     "SELECT COUNT(*) AS student_count\n"
     "FROM students\n"
-    "WHERE grade >= 18;  -- hw01\n\n"
+    "WHERE grade >= 18;\n\n"
     "# number 3\n"
     "SELECT name\n"
     "FROM students\n"
-    "WHERE grade < 18;  -- hw01\n"
+    "WHERE grade < 18;\n"
     "```"
 )
 
@@ -62,16 +64,19 @@ def handle_message(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     text = update.message.text.strip()
 
+    # دریافت نام
     if user_state.get(chat_id) == "waiting_name":
         context.user_data["name"] = text
         user_state[chat_id] = "waiting_student_id"
         update.message.reply_text("نام ثبت شد. لطفاً شماره دانشجویی خود را وارد کنید:")
 
+    # دریافت شماره دانشجویی
     elif user_state.get(chat_id) == "waiting_student_id":
         context.user_data["student_id"] = text
         user_state[chat_id] = "waiting_sql"
         update.message.reply_text(sql_guide_text, parse_mode='Markdown')
 
+    # دریافت متن SQL
     elif user_state.get(chat_id) == "waiting_sql":
         sql_text = text
         process_sql(update, context, sql_text)
@@ -108,23 +113,16 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
     with engine.connect() as conn:
         for i, student_query in enumerate(queries):
             try:
-                # شماره تمرین را از SQL استخراج می‌کنیم: hw01, hw02 ...
-                hw_match = re.search(r"(hw\d+)", student_query, re.IGNORECASE)
-                hw = hw_match.group(1).lower() if hw_match else "hw_unknown"
-
-                # نام جدول مرجع
-                reference_table = f"{hw}_q{i+1}_reference"
-
+                reference_table = f"{CURRENT_HW}_q{i+1}_reference"
                 student_rows = conn.execute(text(student_query)).fetchall()
                 reference_rows = conn.execute(text(f"SELECT * FROM {reference_table}")).fetchall()
 
-                # مقایسه خروجی به صورت set
                 if set(student_rows) == set(reference_rows):
                     correct_count += 1
             except Exception as e:
                 print(f"Error executing query {i+1}: {e}")
 
-        # ثبت نتایج
+        # ایجاد جدول نتایج در صورت نبود
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS student_results (
                 student_id TEXT,
@@ -136,11 +134,16 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
 
         conn.execute(
             text("INSERT INTO student_results (student_id, name, hw, correct_count) VALUES (:student_id, :name, :hw, :correct_count)"),
-            {"student_id": student_id, "name": name, "hw": hw, "correct_count": correct_count}
+            {"student_id": student_id, "name": name, "hw": CURRENT_HW, "correct_count": correct_count}
         )
 
-    update.message.reply_text(f"تصحیح انجام شد! {correct_count}/{len(queries)} Query درست است.")
-    user_state[chat_id] = None
+    update.message.reply_text(
+        f"تصحیح انجام شد! {correct_count}/{len(queries)} Query درست است.\n\n"
+        "اکنون می‌توانید تمرین بعدی را ارسال کنید؛ نیازی به وارد کردن نام یا شماره دانشجویی دوباره نیست."
+    )
+
+    # آماده برای تمرین بعدی
+    user_state[chat_id] = "waiting_sql"
 
 # ==================== راه‌اندازی ربات ====================
 updater = Updater(TOKEN, use_context=True)
