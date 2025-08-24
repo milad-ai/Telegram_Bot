@@ -1,10 +1,11 @@
 import os
 import re
-from telegram import Update, Document
+from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update, Document
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 from sqlalchemy import create_engine, text
 from flask import Flask
 from threading import Thread
+
 
 # ==================== تنظیمات ====================
 TOKEN = os.environ.get("BOT_TOKEN")
@@ -14,37 +15,54 @@ if not TOKEN or not DB_URI:
     raise ValueError("BOT_TOKEN and DB_URI must be set!")
 
 engine = create_engine(DB_URI)
+
+majors = [["علوم کامپیوتر"], ["آمار"]]
+hw_numbers = [["3"]]
+
 user_state = {}
 
 welcome_text = (
-    "🎓 به ربات تصحیح SQL خوش آمدید! 🎓\n\n"
-    "ابتدا نام و شماره دانشجویی خود را وارد کنید، سپس فایل یا متن SQL خود را ارسال کنید "
-    "تا بررسی و تصحیح شود.\n\n"
+    "🎓 ربات درس پایگاه داده 🎓\n\n"
+    "خوش آمدید! این ربات برای دانشجویان ترم ۱۴۰۴–۱۴۰۵ "
+    "دانشگاه شهید بهشتی، دانشکده ریاضی طراحی شده است.\n\n"
+    "می‌توانید رشته خود را انتخاب کنید، شماره تمرین را وارد کنید، "
+    "و فایل یا متن SQL خود را ارسال کنید تا بررسی و تصحیح شود.\n\n"
     "📚 موفق باشید!"
-)
-
-sql_guide_text = (
-    "✅ حالا SQL خود را ارسال کنید یا فایل .sql بفرستید.\n"
-    "📌 نکات مهم:\n"
-    "1️⃣ شماره تمرین باید در بالای فایل مشخص شود، مثلا: -- hw01\n"
-    "2️⃣ هر سوال با یک کامنت مشخص می‌شود: # number 1, # number 2 و ...\n"
-    "3️⃣ ترتیب اجرای Query ها مهم نیست؛ فقط خروجی باید با جدول مرجع مطابقت داشته باشد.\n"
-    "4️⃣ می‌توانید متن SQL را مستقیم بفرستید یا یک فایل .sql ارسال کنید.\n"
 )
 
 # ==================== توابع ====================
 def start(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     update.message.reply_text(welcome_text)
-    user_state[chat_id] = "waiting_student_info"
-    update.message.reply_text("لطفاً نام و شماره دانشجویی خود را با کاما وارد کنید (مثلاً: علی رضایی, 12345):")
+    user_state[chat_id] = "waiting_major"
+    reply_markup = ReplyKeyboardMarkup(majors, one_time_keyboard=True)
+    update.message.reply_text("لطفاً رشته خود را انتخاب کنید:", reply_markup=reply_markup)
 
 def handle_message(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
-    text = update.message.text.strip()
+    text = update.message.text
 
-    # دریافت نام و شماره دانشجویی
-    if user_state.get(chat_id) == "waiting_student_info":
+    if user_state.get(chat_id) == "waiting_major":
+        if text in ["علوم کامپیوتر", "آمار"]:
+            context.user_data["major"] = text
+            user_state[chat_id] = "waiting_hw"
+            reply_markup = ReplyKeyboardMarkup(hw_numbers, one_time_keyboard=True)
+            update.message.reply_text("رشته انتخاب شد. شماره تمرین را انتخاب کنید:", reply_markup=reply_markup)
+        else:
+            update.message.reply_text("لطفاً یکی از گزینه‌های منو را انتخاب کنید.")
+
+    elif user_state.get(chat_id) == "waiting_hw":
+        if text in ["3"]:
+            context.user_data["hw"] = text
+            user_state[chat_id] = "waiting_student_info"
+            update.message.reply_text(
+                "نام و شماره دانشجویی خود را با کاما وارد کنید (مثلاً: علی رضایی, 12345):",
+                reply_markup=ReplyKeyboardRemove()
+            )
+        else:
+            update.message.reply_text("لطفاً شماره تمرین معتبر انتخاب کنید.")
+
+    elif user_state.get(chat_id) == "waiting_student_info":
         try:
             parts = text.split(",")
             if len(parts) != 2:
@@ -54,13 +72,10 @@ def handle_message(update: Update, context: CallbackContext):
             context.user_data["name"] = name
             context.user_data["student_id"] = student_id
             user_state[chat_id] = "waiting_sql"
-            update.message.reply_text(sql_guide_text)
+            update.message.reply_text("لطفاً SQL خود را ارسال کنید یا فایل .sql بفرستید.")
         except Exception:
-            update.message.reply_text(
-                "فرمت نامعتبر. لطفاً از فرمت: نام فارسی, شماره دانشجویی استفاده کنید."
-            )
+            update.message.reply_text("فرمت نامعتبر. لطفاً از فرمت: نام فارسی, شماره دانشجویی استفاده کنید.")
 
-    # دریافت متن SQL
     elif user_state.get(chat_id) == "waiting_sql":
         sql_text = text
         process_sql(update, context, sql_text)
@@ -84,19 +99,13 @@ def handle_document(update: Update, context: CallbackContext):
 # ==================== پردازش SQL ====================
 def process_sql(update: Update, context: CallbackContext, sql_text: str):
     chat_id = update.message.chat_id
-    name = context.user_data["name"]
-    student_id = context.user_data["student_id"]
 
-    # استخراج شماره تمرین از خط اول: -- hw01
-    hw_match = re.search(r"--\s*(hw\d+)", sql_text, re.IGNORECASE)
-    if not hw_match:
-        update.message.reply_text("شماره تمرین پیدا نشد. لطفاً خط اول فایل را با فرمت: -- hw01 قرار دهید.")
-        return
-    hw = hw_match.group(1).lower()
-
-    # جدا کردن Query ها بر اساس # number X
     queries = re.split(r"#\s*number\s*\d+", sql_text, flags=re.IGNORECASE)
     queries = [q.strip() for q in queries if q.strip()]
+
+    hw = context.user_data["hw"]
+    name = context.user_data["name"]
+    student_id = context.user_data["student_id"]
 
     correct_count = 0
 
@@ -104,14 +113,13 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
         for i, student_query in enumerate(queries):
             try:
                 student_rows = conn.execute(text(student_query)).fetchall()
-                reference_table = f"{hw}_q{i+1}_reference"
+                reference_table = f"hw{hw}_q{i+1}_reference"
                 reference_rows = conn.execute(text(f"SELECT * FROM {reference_table}")).fetchall()
                 if set(student_rows) == set(reference_rows):
                     correct_count += 1
             except Exception as e:
                 print(f"Error executing query {i+1}: {e}")
 
-        # ایجاد جدول نتایج در صورت نبود
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS student_results (
                 student_id TEXT,
@@ -126,10 +134,8 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
             {"student_id": student_id, "name": name, "hw": hw, "correct_count": correct_count}
         )
 
-    update.message.reply_text(
-        f"تصحیح انجام شد! {correct_count}/{len(queries)} Query درست است.\n\n"
-        "می‌توانید تمرین بعدی را ارسال کنید؛ نیازی به وارد کردن دوباره نام یا شماره دانشجویی نیست."
-    )
+    update.message.reply_text(f"تصحیح انجام شد! {correct_count}/{len(queries)} Query درست است.")
+    user_state[chat_id] = None
 
 # ==================== راه‌اندازی ربات ====================
 updater = Updater(TOKEN, use_context=True)
