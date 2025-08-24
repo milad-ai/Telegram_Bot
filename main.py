@@ -14,7 +14,6 @@ if not TOKEN or not DB_URI:
     raise ValueError("BOT_TOKEN and DB_URI must be set!")
 
 engine = create_engine(DB_URI)
-
 user_state = {}
 
 # ==================== تمرین جاری ====================
@@ -39,17 +38,11 @@ sql_guide_text = (
     "💡 نمونه SQL مجاز:\n"
     "```sql\n"
     "# number 1\n"
-    "SELECT id, name, grade\n"
-    "FROM students\n"
-    "WHERE grade >= 18;\n\n"
+    "SELECT id, name, grade FROM students WHERE grade >= 18;\n\n"
     "# number 2\n"
-    "SELECT COUNT(*) AS student_count\n"
-    "FROM students\n"
-    "WHERE grade >= 18;\n\n"
+    "SELECT COUNT(*) AS student_count FROM students WHERE grade >= 18;\n\n"
     "# number 3\n"
-    "SELECT name\n"
-    "FROM students\n"
-    "WHERE grade < 18;\n"
+    "SELECT name FROM students WHERE grade < 18;\n"
     "```"
 )
 
@@ -98,15 +91,18 @@ def handle_document(update: Update, context: CallbackContext):
     process_sql(update, context, sql_text)
 
 # ==================== پردازش SQL ====================
+def normalize_rows(rows):
+    """تبدیل مقادیر ردیف‌ها به رشته برای مقایسه"""
+    return [tuple(str(v) if v is not None else "" for v in r) for r in rows]
+
 def process_sql(update: Update, context: CallbackContext, sql_text: str):
     chat_id = update.message.chat_id
+    student_id = context.user_data["student_id"]
+    name = context.user_data["name"]
 
     # جدا کردن Queryها بر اساس کامنت # number X
     queries = re.split(r"#\s*number\s*\d+", sql_text, flags=re.IGNORECASE)
     queries = [q.strip() for q in queries if q.strip()]
-
-    student_id = context.user_data["student_id"]
-    name = context.user_data["name"]
 
     correct_count = 0
 
@@ -114,11 +110,14 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
         for i, student_query in enumerate(queries):
             try:
                 reference_table = f"{CURRENT_HW}_q{i+1}_reference"
-                student_rows = conn.execute(text(student_query)).fetchall()
-                reference_rows = conn.execute(text(f"SELECT * FROM {reference_table}")).fetchall()
-
-                if set(student_rows) == set(reference_rows):
-                    correct_count += 1
+                # اجرای هر دستور جداگانه
+                for stmt in student_query.split(";"):
+                    stmt = stmt.strip()
+                    if stmt:
+                        student_rows = conn.execute(text(stmt)).fetchall()
+                        reference_rows = conn.execute(text(f"SELECT * FROM {reference_table}")).fetchall()
+                        if normalize_rows(student_rows) == normalize_rows(reference_rows):
+                            correct_count += 1
             except Exception as e:
                 print(f"Error executing query {i+1}: {e}")
 
@@ -132,6 +131,7 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
             )
         """))
 
+        # ذخیره نتیجه دانشجو
         conn.execute(
             text("INSERT INTO student_results (student_id, name, hw, correct_count) VALUES (:student_id, :name, :hw, :correct_count)"),
             {"student_id": student_id, "name": name, "hw": CURRENT_HW, "correct_count": correct_count}
