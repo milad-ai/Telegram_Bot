@@ -6,6 +6,8 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Callb
 from sqlalchemy import create_engine, text
 from flask import Flask
 from threading import Thread
+import jdatetime
+from datetime import datetime
 
 
 # ==================== تنظیمات ====================
@@ -52,7 +54,36 @@ welcome_text = (
 
 )
 
-# ==================== توابع کمکی ====================
+def get_persian_datetime():
+    """تاریخ و ساعت فعلی را به فارسی برمی‌گرداند"""
+    now = datetime.now()
+    persian_date = jdatetime.datetime.fromgregorian(datetime=now)
+    
+    # نام روزهای هفته به فارسی
+    persian_weekdays = {
+        0: 'شنبه',
+        1: 'یکشنبه', 
+        2: 'دوشنبه',
+        3: 'سه‌شنبه',
+        4: 'چهارشنبه',
+        5: 'پنج‌شنبه',
+        6: 'جمعه'
+    }
+    
+    # نام ماه‌های فارسی
+    persian_months = {
+        1: 'فروردین', 2: 'اردیبهشت', 3: 'خرداد', 4: 'تیر',
+        5: 'مرداد', 6: 'شهریور', 7: 'مهر', 8: 'آبان',
+        9: 'آذر', 10: 'دی', 11: 'بهمن', 12: 'اسفند'
+    }
+    
+    weekday_name = persian_weekdays[persian_date.weekday()]
+    month_name = persian_months[persian_date.month]
+    
+    formatted_date = f"{weekday_name} {persian_date.day} {month_name} {persian_date.year}"
+    formatted_time = f"{persian_date.hour:02d}:{persian_date.minute:02d}:{persian_date.second:02d}"
+    
+    return formatted_date, formatted_time
 def get_submission_count(student_id: str, hw: str) -> int:
     """تعداد ارسال‌های قبلی دانشجو برای یک تمرین خاص را برمی‌گرداند"""
     try:
@@ -250,8 +281,12 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
             update.message.reply_text(f"⚠️ خطا در ذخیره‌سازی: {str(e)}")
             return
 
-    # آماده‌سازی پیام نتیجه (با اطلاعات دانشجو)
+    # آماده‌سازی پیام نتیجه (با اطلاعات دانشجو و تاریخ/ساعت)
+    persian_date, persian_time = get_persian_datetime()
+    
     result_message = f"✅ تصحیح انجام شد!\n\n"
+    result_message += f"📅 تاریخ تصحیح: {persian_date}\n"
+    result_message += f"🕐 ساعت تصحیح: {persian_time}\n\n"
     result_message += f"👤 دانشجو: {name}\n"
     result_message += f"🆔 شماره دانشجویی: {student_id}\n"
     result_message += f"📚 رشته: {major}\n"
