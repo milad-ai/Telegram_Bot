@@ -71,7 +71,12 @@ def get_submission_count(student_id: str, hw: str) -> int:
 
 def get_main_menu():
     """منوی اصلی را برمی‌گرداند"""
-    return ReplyKeyboardMarkup([["شروع دوباره"], ["تمرین جدید"], ["پایان"]], one_time_keyboard=True)
+    return ReplyKeyboardMarkup([["تمرین جدید"], ["پایان"]], one_time_keyboard=True)
+
+def get_hw_selection_menu():
+    """منوی انتخاب تمرین با دکمه بازگشت را برمی‌گرداند"""
+    hw_with_back = hw_numbers + [["🔙 بازگشت به منو اصلی"]]
+    return ReplyKeyboardMarkup(hw_with_back, one_time_keyboard=True)
 
 # ==================== توابع ====================
 def start(update: Update, context: CallbackContext):
@@ -85,9 +90,10 @@ def handle_message(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     text = update.message.text
 
-    # بررسی دکمه شروع دوباره
-    if text == "شروع دوباره":
-        start(update, context)
+    # بررسی دکمه بازگشت به منو اصلی
+    if text == "🔙 بازگشت به منو اصلی":
+        user_state[chat_id] = "completed"
+        update.message.reply_text("بازگشت به منو اصلی:", reply_markup=get_main_menu())
         return
 
     if user_state.get(chat_id) == "waiting_major":
@@ -106,10 +112,15 @@ def handle_message(update: Update, context: CallbackContext):
     elif user_state.get(chat_id) == "waiting_student_id":
         context.user_data["student_id"] = text.strip()
         user_state[chat_id] = "waiting_hw"
-        reply_markup = ReplyKeyboardMarkup(hw_numbers, one_time_keyboard=True)
+        reply_markup = get_hw_selection_menu()
         update.message.reply_text("اطلاعات شما ثبت شد. شماره تمرین را انتخاب کنید:", reply_markup=reply_markup)
 
     elif user_state.get(chat_id) == "waiting_hw":
+        if text == "🔙 بازگشت به منو اصلی":
+            user_state[chat_id] = "completed"
+            update.message.reply_text("بازگشت به منو اصلی:", reply_markup=get_main_menu())
+            return
+            
         if text in ["3", "4", "5", "6"]:
             student_id = context.user_data["student_id"]
             hw = text
@@ -121,7 +132,7 @@ def handle_message(update: Update, context: CallbackContext):
                 update.message.reply_text(
                     f"❌ شما قبلاً ۱۰ بار تمرین {hw} را ارسال کرده‌اید و حق ارسال مجدد ندارید.\n"
                     "لطفاً تمرین دیگری انتخاب کنید:",
-                    reply_markup=ReplyKeyboardMarkup(hw_numbers, one_time_keyboard=True)
+                    reply_markup=get_hw_selection_menu()
                 )
                 return
             
@@ -144,7 +155,7 @@ def handle_message(update: Update, context: CallbackContext):
     elif user_state.get(chat_id) == "completed":
         if text == "تمرین جدید":
             user_state[chat_id] = "waiting_hw"
-            reply_markup = ReplyKeyboardMarkup(hw_numbers, one_time_keyboard=True)
+            reply_markup = get_hw_selection_menu()
             update.message.reply_text("شماره تمرین جدید را انتخاب کنید:", reply_markup=reply_markup)
         elif text == "پایان":
             update.message.reply_text("متشکرم از استفاده! برای شروع دوباره /start را بزنید.", 
