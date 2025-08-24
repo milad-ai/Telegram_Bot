@@ -116,7 +116,7 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
 
     correct_count = 0
 
-    with engine.connect() as conn:
+    with engine.begin() as conn:  # استفاده از begin() برای auto-commit
         for i, student_query in enumerate(queries):
             try:
                 student_rows = conn.execute(text(student_query)).fetchall()
@@ -127,19 +127,30 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
             except Exception as e:
                 print(f"Error executing query {i+1}: {e}")
 
+        # ایجاد جدول اگر وجود نداشته باشد
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS student_results (
-                student_id TEXT,
-                name TEXT,
-                hw TEXT,
-                correct_count INT
+                id SERIAL PRIMARY KEY,
+                student_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                hw TEXT NOT NULL,
+                correct_count INTEGER NOT NULL,
+                submission_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """))
 
-        conn.execute(
-            text("INSERT INTO student_results (student_id, name, hw, correct_count) VALUES (:student_id, :name, :hw, :correct_count)"),
-            {"student_id": student_id, "name": name, "hw": hw, "correct_count": correct_count}
-        )
+        # درج داده‌ها
+        try:
+            conn.execute(
+                text("INSERT INTO student_results (student_id, name, hw, correct_count) VALUES (:student_id, :name, :hw, :correct_count)"),
+                {"student_id": student_id, "name": name, "hw": hw, "correct_count": correct_count}
+            )
+            print(f"✅ Data inserted successfully for {name} ({student_id}) - HW{hw}: {correct_count} correct")
+        except Exception as e:
+            print(f"❌ Error inserting data: {e}")
+            # ارسال پیام خطا به کاربر
+            update.message.reply_text(f"⚠️ خطا در ذخیره‌سازی: {str(e)}")
+            return
 
     # ارسال نتیجه و آماده‌سازی برای تمرین بعدی
     result_message = f"✅ تصحیح انجام شد!\n📊 نتیجه: {correct_count}/{len(queries)} Query درست است.\n\n"
