@@ -1,4 +1,4 @@
-import os
+    import os
 import re
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update, Document
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
@@ -17,7 +17,7 @@ if not TOKEN or not DB_URI:
 engine = create_engine(DB_URI)
 
 majors = [["علوم کامپیوتر"], ["آمار"]]
-hw_numbers = [["3"]]
+hw_numbers = [["3", "4", "5", "6"]]
 
 user_state = {}
 
@@ -45,40 +45,47 @@ def handle_message(update: Update, context: CallbackContext):
     if user_state.get(chat_id) == "waiting_major":
         if text in ["علوم کامپیوتر", "آمار"]:
             context.user_data["major"] = text
-            user_state[chat_id] = "waiting_hw"
-            reply_markup = ReplyKeyboardMarkup(hw_numbers, one_time_keyboard=True)
-            update.message.reply_text("رشته انتخاب شد. شماره تمرین را انتخاب کنید:", reply_markup=reply_markup)
+            user_state[chat_id] = "waiting_name"
+            update.message.reply_text("رشته انتخاب شد. لطفاً نام خود را وارد کنید:", reply_markup=ReplyKeyboardRemove())
         else:
             update.message.reply_text("لطفاً یکی از گزینه‌های منو را انتخاب کنید.")
 
+    elif user_state.get(chat_id) == "waiting_name":
+        context.user_data["name"] = text.strip()
+        user_state[chat_id] = "waiting_student_id"
+        update.message.reply_text("لطفاً شماره دانشجویی خود را وارد کنید:")
+
+    elif user_state.get(chat_id) == "waiting_student_id":
+        context.user_data["student_id"] = text.strip()
+        user_state[chat_id] = "waiting_hw"
+        reply_markup = ReplyKeyboardMarkup(hw_numbers, one_time_keyboard=True)
+        update.message.reply_text("اطلاعات شما ثبت شد. شماره تمرین را انتخاب کنید:", reply_markup=reply_markup)
+
     elif user_state.get(chat_id) == "waiting_hw":
-        if text in ["3"]:
+        if text in ["3", "4", "5", "6"]:
             context.user_data["hw"] = text
-            user_state[chat_id] = "waiting_student_info"
+            user_state[chat_id] = "waiting_sql"
             update.message.reply_text(
-                "نام و شماره دانشجویی خود را با کاما وارد کنید (مثلاً: علی رضایی, 12345):",
+                f"تمرین {text} انتخاب شد. لطفاً SQL خود را ارسال کنید یا فایل .sql بفرستید:",
                 reply_markup=ReplyKeyboardRemove()
             )
         else:
             update.message.reply_text("لطفاً شماره تمرین معتبر انتخاب کنید.")
 
-    elif user_state.get(chat_id) == "waiting_student_info":
-        try:
-            parts = text.split(",")
-            if len(parts) != 2:
-                raise ValueError("فرمت اشتباه")
-            name = parts[0].strip()
-            student_id = parts[1].strip()
-            context.user_data["name"] = name
-            context.user_data["student_id"] = student_id
-            user_state[chat_id] = "waiting_sql"
-            update.message.reply_text("لطفاً SQL خود را ارسال کنید یا فایل .sql بفرستید.")
-        except Exception:
-            update.message.reply_text("فرمت نامعتبر. لطفاً از فرمت: نام فارسی, شماره دانشجویی استفاده کنید.")
-
     elif user_state.get(chat_id) == "waiting_sql":
         sql_text = text
         process_sql(update, context, sql_text)
+
+    elif user_state.get(chat_id) == "completed":
+        # اگر کاربر پیام ارسال کرد بعد از تکمیل، برای تمرین جدید آماده می‌شود
+        if text == "تمرین جدید":
+            user_state[chat_id] = "waiting_hw"
+            reply_markup = ReplyKeyboardMarkup(hw_numbers, one_time_keyboard=True)
+            update.message.reply_text("شماره تمرین جدید را انتخاب کنید:", reply_markup=reply_markup)
+        else:
+            user_state[chat_id] = "waiting_hw"
+            reply_markup = ReplyKeyboardMarkup(hw_numbers, one_time_keyboard=True)
+            update.message.reply_text("شماره تمرین را انتخاب کنید:", reply_markup=reply_markup)
 
 # ==================== دریافت فایل SQL ====================
 def handle_document(update: Update, context: CallbackContext):
@@ -134,8 +141,15 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
             {"student_id": student_id, "name": name, "hw": hw, "correct_count": correct_count}
         )
 
-    update.message.reply_text(f"تصحیح انجام شد! {correct_count}/{len(queries)} Query درست است.")
-    user_state[chat_id] = None
+    # ارسال نتیجه و آماده‌سازی برای تمرین بعدی
+    result_message = f"✅ تصحیح انجام شد!\n📊 نتیجه: {correct_count}/{len(queries)} Query درست است.\n\n"
+    
+    # نمایش منوی تمرین جدید
+    new_hw_markup = ReplyKeyboardMarkup([["تمرین جدید"], ["پایان"]], one_time_keyboard=True)
+    result_message += "آیا می‌خواهید تمرین جدیدی ثبت کنید؟"
+    
+    update.message.reply_text(result_message, reply_markup=new_hw_markup)
+    user_state[chat_id] = "completed"
 
 # ==================== راه‌اندازی ربات ====================
 updater = Updater(TOKEN, use_context=True)
