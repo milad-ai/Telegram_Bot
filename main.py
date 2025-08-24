@@ -16,36 +16,32 @@ if not TOKEN or not DB_URI:
 engine = create_engine(DB_URI)
 user_state = {}
 
+# ==================== تمرین جاری ====================
+CURRENT_HW = "hw01"  # فقط یک بار مشخص می‌شود
+
 welcome_text = (
-    "🎓 به ربات تصحیح SQL خوش آمدید! 🎓\n\n"
-    "این ربات مخصوص دانشجویان درس پایگاه داده ترم ۱۴۰۴–۱۴۰۵ "
-    "دانشگاه شهید بهشتی، دانشکده ریاضی است.\n\n"
-    "ابتدا نام خود را وارد کنید، سپس شماره دانشجویی، و در نهایت فایل یا متن SQL خود را ارسال کنید "
-    "تا بررسی و تصحیح شود.\n\n📚 موفق باشید!"
+    "🎓 خوش آمدید به ربات تصحیح SQL 🎓\n\n"
+    "این ربات مخصوص دانشجویان درس پایگاه داده ترم ۱۴۰۴–۱۴۰۵ دانشگاه شهید بهشتی، دانشکده ریاضی است.\n\n"
+    "ابتدا نام خود را وارد کنید، سپس شماره دانشجویی، و در نهایت فایل یا متن SQL خود را ارسال کنید تا بررسی و تصحیح شود.\n\n"
+    "📚 موفق باشید!"
 )
 
 sql_guide_text = (
-    "✅ حالا SQL خود را ارسال کنید یا فایل .sql بفرستید.\n\n"
+    f"✅ حالا SQL خود را ارسال کنید یا فایل .sql بفرستید.\n\n"
     "📌 نکات مهم:\n"
-    "1️⃣ شماره تمرین را در بالای فایل بنویسید، مثلا: -- hw01\n"
+    f"1️⃣ شماره تمرین باید در بالای فایل مشخص شود، مثلا: -- {CURRENT_HW}\n"
     "2️⃣ هر سوال با یک کامنت مشخص می‌شود: # number 1, # number 2 و ...\n"
-    "3️⃣ ترتیب اجرای Query ها مهم نیست؛ فقط خروجی باید با جدول مرجع مطابقت داشته باشد.\n"
+    "3️⃣ ترتیب اجرای Query ها مهم نیست؛ فقط خروجی با جدول مرجع مطابقت داشته باشد.\n"
     "4️⃣ می‌توانید متن SQL را مستقیم بفرستید یا یک فایل .sql ارسال کنید.\n\n"
     "💡 نمونه SQL مجاز:\n"
     "```sql\n"
     "-- hw01\n"
     "# number 1\n"
-    "SELECT id, name, grade\n"
-    "FROM students\n"
-    "WHERE grade >= 18;\n\n"
+    "SELECT id, name, grade FROM students WHERE grade >= 18;\n\n"
     "# number 2\n"
-    "SELECT COUNT(*) AS student_count\n"
-    "FROM students\n"
-    "WHERE grade >= 18;\n\n"
+    "SELECT COUNT(*) AS student_count FROM students WHERE grade >= 18;\n\n"
     "# number 3\n"
-    "SELECT name\n"
-    "FROM students\n"
-    "WHERE grade < 18;\n"
+    "SELECT name FROM students WHERE grade < 18;\n"
     "```"
 )
 
@@ -60,20 +56,24 @@ def handle_message(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     text = update.message.text.strip()
 
+    # دریافت نام
     if user_state.get(chat_id) == "waiting_name":
         context.user_data["name"] = text
         user_state[chat_id] = "waiting_student_id"
         update.message.reply_text("نام ثبت شد. لطفاً شماره دانشجویی خود را وارد کنید:")
 
+    # دریافت شماره دانشجویی
     elif user_state.get(chat_id) == "waiting_student_id":
         context.user_data["student_id"] = text
         user_state[chat_id] = "waiting_sql"
         update.message.reply_text(sql_guide_text, parse_mode='Markdown')
 
+    # دریافت متن SQL
     elif user_state.get(chat_id) == "waiting_sql":
         sql_text = text
         process_sql(update, context, sql_text)
 
+# ==================== دریافت فایل SQL ====================
 def handle_document(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     if user_state.get(chat_id) != "waiting_sql":
@@ -93,14 +93,7 @@ def handle_document(update: Update, context: CallbackContext):
 def process_sql(update: Update, context: CallbackContext, sql_text: str):
     chat_id = update.message.chat_id
 
-    # پیدا کردن شماره تمرین از بالای فایل
-    hw_match = re.match(r"--\s*(hw\d+)", sql_text.strip())
-    if hw_match:
-        current_hw = hw_match.group(1)
-    else:
-        update.message.reply_text("شماره تمرین مشخص نیست. لطفاً بالای فایل SQL بنویسید: -- hwXX")
-        return
-
+    # جدا کردن Queryها بر اساس کامنت # number X
     queries = re.split(r"#\s*number\s*\d+", sql_text, flags=re.IGNORECASE)
     queries = [q.strip() for q in queries if q.strip()]
 
@@ -110,11 +103,16 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
 
     with engine.connect() as conn:
         for i, student_query in enumerate(queries):
-            reference_table = f"{current_hw}_q{i+1}_reference"
+            reference_table = f"{CURRENT_HW}_q{i+1}_reference"
             try:
-                student_rows = conn.execute(text(student_query)).fetchall()
-                reference_rows = conn.execute(text(f"SELECT * FROM {reference_table}")).fetchall()
-                if set(student_rows) == set(reference_rows):
+                student_result = conn.execute(text(student_query)).mappings().all()
+                reference_result = conn.execute(text(f"SELECT * FROM {reference_table}")).mappings().all()
+
+                # مقایسه مقادیر فقط، بدون توجه به ترتیب ردیف و نام ستون
+                student_values = [tuple(row.values()) for row in student_result]
+                reference_values = [tuple(row.values()) for row in reference_result]
+
+                if sorted(student_values) == sorted(reference_values):
                     correct_count += 1
             except Exception as e:
                 print(f"Error executing query {i+1}: {e}")
@@ -131,14 +129,15 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
 
         conn.execute(
             text("INSERT INTO student_results (student_id, name, hw, correct_count) VALUES (:student_id, :name, :hw, :correct_count)"),
-            {"student_id": student_id, "name": name, "hw": current_hw, "correct_count": correct_count}
+            {"student_id": student_id, "name": name, "hw": CURRENT_HW, "correct_count": correct_count}
         )
 
     update.message.reply_text(
-        f"تصحیح انجام شد! {correct_count}/{len(queries)} Query درست است.\n\n"
+        f"✅ تصحیح انجام شد! {correct_count}/{len(queries)} Query درست است.\n\n"
         "اکنون می‌توانید تمرین بعدی را ارسال کنید؛ نیازی به وارد کردن نام یا شماره دانشجویی دوباره نیست."
     )
 
+    # آماده برای تمرین بعدی
     user_state[chat_id] = "waiting_sql"
 
 # ==================== راه‌اندازی ربات ====================
@@ -149,7 +148,7 @@ dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
 dp.add_handler(MessageHandler(Filters.document, handle_document))
 updater.start_polling()
 
-# ==================== وب سرور Flask ====================
+# ==================== وب سرور Flask برای Keep Alive ====================
 app = Flask('')
 @app.route('/')
 def home():
