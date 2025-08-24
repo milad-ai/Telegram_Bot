@@ -3,7 +3,7 @@ from telegram.ext import Updater, CommandHandler
 from flask import Flask
 from threading import Thread
 
-# توکن از Environment Variable
+
 TOKEN = os.environ.get("BOT_TOKEN")
 
 def start(update, context):
@@ -14,7 +14,7 @@ dp = updater.dispatcher
 dp.add_handler(CommandHandler("start", start))
 updater.start_polling()
 
-# وب سرور Flask برای Keep Alive
+
 app = Flask('')
 
 @app.route('/')
