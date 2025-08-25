@@ -226,6 +226,7 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
 
     correct_count = 0
     incorrect_questions = []
+    query_results = []
 
     with engine.begin() as conn:
         for i, student_query in enumerate(queries):
@@ -244,10 +245,20 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
                     correct_count += 1
                 else:
                     incorrect_questions.append(question_number)
-                    
+                query_results.append({
+                    "question_number": question_number,
+                    "student_rows": [list(r) for r in student_rows],
+                    "reference_rows": [list(r) for r in reference_rows],
+                    "correct": correct
+                })
             except Exception as e:
                 print(f"Error executing query {question_number}: {e}")
                 incorrect_questions.append(question_number)
+                query_results.append({
+                    "question_number": question_number,
+                    "error": str(e),
+                    "correct": False
+                })
 
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS student_results (
