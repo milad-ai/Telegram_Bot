@@ -226,7 +226,6 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
 
     correct_count = 0
     incorrect_questions = []
-    query_results = []
 
     with engine.begin() as conn:
         for i, student_query in enumerate(queries):
@@ -245,20 +244,10 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
                     correct_count += 1
                 else:
                     incorrect_questions.append(question_number)
-                query_results.append({
-                    "question_number": question_number,
-                    "student_rows": [list(r) for r in student_rows],
-                    "reference_rows": [list(r) for r in reference_rows],
-                    "correct": correct
-                })
+                    
             except Exception as e:
                 print(f"Error executing query {question_number}: {e}")
                 incorrect_questions.append(question_number)
-                query_results.append({
-                    "question_number": question_number,
-                    "error": str(e),
-                    "correct": False
-                })
 
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS student_results (
@@ -268,15 +257,14 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
                 major TEXT NOT NULL,
                 hw TEXT NOT NULL,
                 correct_count INTEGER NOT NULL,
-                submission_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                query_results JSONB
+                submission_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """))
 
         try:
             conn.execute(
-                text("INSERT INTO student_results (student_id, name, major, hw, correct_count, query_results) VALUES (:student_id, :name, :major, :hw, :correct_count, :query_results)"),
-                {"student_id": student_id, "name": name, "major": major, "hw": hw, "correct_count": correct_count, "query_results": query_results}
+                text("INSERT INTO student_results (student_id, name, major, hw, correct_count) VALUES (:student_id, :name, :major, :hw, :correct_count)"),
+                {"student_id": student_id, "name": name, "major": major, "hw": hw, "correct_count": correct_count}
             )
             print(f"✅ Data inserted successfully for {name} ({student_id}) - Major: {major} - HW{hw}: {correct_count} correct")
         except Exception as e:
