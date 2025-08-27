@@ -18,7 +18,8 @@ DB_URI = os.environ.get("DB_URI")
 if not TOKEN or not DB_URI:
     raise ValueError("BOT_TOKEN and DB_URI must be set!")
 
-engine = create_engine(DB_URI)
+engine = create_engine(DB_URI, pool_pre_ping=True)
+
 
 def warmup_db():
     try:
