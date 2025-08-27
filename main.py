@@ -174,7 +174,7 @@ def handle_message(update: Update, context: CallbackContext):
             context.user_data["major"] = major
             user_state[chat_id] = "waiting_password"
             update.message.reply_text(
-                f"👤 سلام {name}!\n\n"
+    
                 "🔐 لطفاً رمز عبور خود را وارد کنید:"
             )
         else:
@@ -312,7 +312,7 @@ def handle_message(update: Update, context: CallbackContext):
         else:
             update.message.reply_text(
                 "❌ خطا در تغییر رمز عبور!\n"
-                "🔄 لطفاً دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.\n\n"
+                "🔄 لطفاً دوباره تلاش کنید یا با مدرس تماس بگیرید.\n\n"
                 "🏠 بازگشت به منو اصلی:",
                 reply_markup=get_main_menu()
             )
