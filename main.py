@@ -20,6 +20,14 @@ if not TOKEN or not DB_URI:
 
 engine = create_engine(DB_URI)
 
+def warmup_db():
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("SELECT 1"))  # برای wake-up
+    except:
+        pass
+
+
 hw_numbers = [["3", "4", "5", "6"]]
 
 user_state = {}
@@ -147,6 +155,7 @@ def get_hw_selection_menu():
 # ==================== توابع ====================
 
 def start(update: Update, context: CallbackContext):
+    warmup_db()
     chat_id = update.message.chat_id
     update.message.reply_text(welcome_text, parse_mode='Markdown')
     user_state[chat_id] = "waiting_student_id"
