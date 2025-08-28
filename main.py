@@ -18,7 +18,8 @@ DB_URI = os.environ.get("DB_URI")
 if not TOKEN or not DB_URI:
     raise ValueError("BOT_TOKEN and DB_URI must be set!")
 
-engine = create_engine(DB_URI)
+engine = create_engine(DB_URI, pool_pre_ping=True)
+
 
 hw_numbers = [["3", "4", "5", "6"]]
 
@@ -200,7 +201,7 @@ def handle_message(update: Update, context: CallbackContext):
             context.user_data["major"] = major
             user_state[chat_id] = "waiting_password"
             update.message.reply_text(
-                f"👤 سلام {name}!\n\n"
+                
                 "🔐 لطفاً رمز عبور خود را وارد کنید:"
             )
         else:
@@ -294,9 +295,9 @@ def handle_message(update: Update, context: CallbackContext):
             update.message.reply_text(
                 "🔐 رمز عبور جدید خود را وارد کنید:\n\n"
                 "⚠️ نکات مهم:\n"
-                "• رمز عبور باید حداقل 4 کاراکتر باشد\n"
-                "• از ترکیب حروف و اعداد استفاده کنید\n"
-                "• رمز عبور را در جای امنی نگهداری کنید",
+                "• رمز عبور باید حداقل 4 کاراکتر باشد\n",
+                
+            
                 reply_markup=ReplyKeyboardMarkup([["🔙 بازگشت به منو اصلی"]], one_time_keyboard=True, resize_keyboard=True)
             )
         elif text == "📧 ثبت ایمیل اطلاع‌رسانی":
@@ -311,7 +312,6 @@ def handle_message(update: Update, context: CallbackContext):
                 f"{email_status}\n\n"
                 "✉️ ایمیل جدید خود را وارد کنید:\n\n"
                 "⚠️ نکات مهم:\n"
-                "• ایمیل معتبر وارد کنید (مثال: name@gmail.com)\n"
                 "• این ایمیل برای اطلاع‌رسانی‌های مهم استفاده می‌شود\n"
                 "• می‌توانید هر زمان آن را تغییر دهید",
                 reply_markup=ReplyKeyboardMarkup([["🔙 بازگشت به منو اصلی"]], one_time_keyboard=True, resize_keyboard=True)
