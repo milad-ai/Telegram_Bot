@@ -1,3 +1,4 @@
+
 import os
 import re
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update, Document, ParseMode
@@ -188,8 +189,14 @@ def handle_message(update: Update, context: CallbackContext):
                 if not rows:
                     update.message.reply_text("📭 هیچ نتیجه‌ای پیدا نشد.")
                 else:
-                    headers = rows[0].keys() if hasattr(rows[0], "_mapping") else range(len(rows[0]))
-                    table = tabulate([tuple(r) for r in rows], headers=headers, tablefmt="github")
+                    if hasattr(rows[0], "_mapping"):
+                        headers = rows[0]._mapping.keys()
+                        table_data = [tuple(r._mapping.values()) for r in rows]
+                    else:
+                        headers = range(len(rows[0]))
+                        table_data = [tuple(r) for r in rows]
+
+                    table = tabulate(table_data, headers=headers, tablefmt="github")
                     update.message.reply_text(f"📊 نتیجه:\n\n```\n{table}\n```", parse_mode=ParseMode.MARKDOWN)
         except Exception as e:
             update.message.reply_text(f"⚠️ خطا در اجرای query: {e}")
@@ -201,17 +208,16 @@ dp.add_handler(CommandHandler("start", start))
 dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
 updater.start_polling()
 
-
 # ==================== وب سرور Flask ====================
 app = Flask('')
 
 @app.route('/')
-def home():
+def home(): 
     return "ربات تلگرام فعال است ✅"
 
 def run():
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
 
-# اجرای Flask در یک thread جداگانه
 Thread(target=run).start()
+updater.idle()
