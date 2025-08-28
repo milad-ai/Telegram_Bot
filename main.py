@@ -1,4 +1,3 @@
-
 import os
 import re
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update, Document
