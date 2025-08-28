@@ -201,8 +201,17 @@ dp.add_handler(CommandHandler("start", start))
 dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
 updater.start_polling()
 
+
 # ==================== وب سرور Flask ====================
 app = Flask('')
+
 @app.route('/')
-def home(): return "ربات تلگرام فعال است ✅"
-def run(): app.run(host="0.0.
+def home():
+    return "ربات تلگرام فعال است ✅"
+
+def run():
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
+
+# اجرای Flask در یک thread جداگانه
+Thread(target=run).start()
