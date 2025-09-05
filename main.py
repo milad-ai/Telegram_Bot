@@ -34,19 +34,19 @@ welcome_text = (
     "3️⃣ شماره تمرین را انتخاب کنید (3، 4، 5، 6)\n"
     "4️⃣ کد SQL خود را ارسال کنید (متن یا فایل .sql)\n\n"
     "⚠️ نکات مهم:\n"
-    "• قبل از هر سوال حتماً کامنت # number X بگذارید\n"
+    "• قبل از هر سوال حتماً کامنت -- # num بگذارید\n"
     "• از `;` در پایان هر query استفاده کنید\n"
     "• فاصله‌ها و enter های اضافی مشکلی ندارند\n"
     "• هر شماره دانشجویی حداکثر ۱۰ بار می‌تواند هر تمرین را ارسال کند\n\n"
     "📝 نمونه فرمت صحیح:\n"
     "```sql\n"
-    "# number 1\n"
+    "-- #1\n"
     "SELECT id, name, grade\n"
-    "FROM students\n"
+    "FROM test\n"
     "WHERE grade >= 15;\n\n"
-    "# number 2\n"
+    "-- #2\n"
     "SELECT COUNT(*) as student_count\n"
-    "FROM students\n"
+    "FROM test\n"
     "WHERE grade >= 15;\n"
     "```\n"
     "━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -627,7 +627,7 @@ def handle_document(update: Update, context: CallbackContext):
 def process_sql(update: Update, context: CallbackContext, sql_text: str):
     chat_id = update.message.chat_id
     
-    queries = re.split(r"#\s*number\s*\d+", sql_text, flags=re.IGNORECASE)
+    queries = re.split(r"--\s*#\d+", sql_text, flags=re.IGNORECASE)
     queries = [q.strip() for q in queries if q.strip()]
     
     hw = context.user_data["hw"]
