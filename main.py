@@ -1,3 +1,4 @@
+
 import os
 import re
 import json
@@ -667,7 +668,6 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
                 print(f"Error executing query {question_number}: {e}")
                 incorrect_questions.append(question_number)
         
-        # ایجاد جدول با ستون sql_queries اگر وجود ندارد
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS student_results (
                 id SERIAL PRIMARY KEY,
@@ -682,21 +682,9 @@ def process_sql(update: Update, context: CallbackContext, sql_text: str):
         """))
         
         try:
-            # درج داده با کوئری‌ها
             conn.execute(
-                text("""
-                    INSERT INTO student_results 
-                    (student_id, name, major, hw, correct_count, sql_queries) 
-                    VALUES (:student_id, :name, :major, :hw, :correct_count, :sql_queries)
-                """),
-                {
-                    "student_id": student_id, 
-                    "name": name, 
-                    "major": major, 
-                    "hw": hw, 
-                    "correct_count": correct_count,
-                    "sql_queries": sql_text  # ذخیره کل کوئری‌ها
-                }
+                text("INSERT INTO student_results (student_id, name, major, hw, correct_count, sql_queries) VALUES (:student_id, :name, :major, :hw, :correct_count, :sql_queries)"),
+                {"student_id": student_id, "name": name, "major": major, "hw": hw, "correct_count": correct_count, "sql_queries": sql_text}
             )
             print(f"✅ Data inserted successfully for {name} ({student_id}) - Major: {major} - HW{hw}: {correct_count} correct")
         except Exception as e:
@@ -841,7 +829,7 @@ dp = updater.dispatcher
 dp.add_handler(CommandHandler("start", start))
 dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
 dp.add_handler(MessageHandler(Filters.document, handle_document))
-updater.start_pooling()
+updater.start_polling()
 
 # ==================== وب سرور Flask برای Keep Alive ====================
 
